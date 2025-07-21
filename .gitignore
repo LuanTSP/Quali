@@ -1,8 +1,7 @@
-matrices
-matrices/*
 .venv
 .venv/*
-results
 __pycache__
 __pycache__/
-results.csv
+spai_minimize.py
+show_sparcity_pattern.py
+remove_columns_spai01.py

@@ -1,6 +1,8 @@
 import numpy as np
+from matplotlib import pyplot as plt
 import networkx as nx
 import random
+from scipy.sparse import csr_matrix
 
 def build_random_matrix(N, m):
     G = nx.barabasi_albert_graph(N, m)
@@ -15,9 +17,12 @@ def build_random_matrix(N, m):
                 M[i,j] += 2*random.random() 
         M[i,i] = k  
     
-    return M
+    return csr_matrix(M)
     
 
 if __name__ == "__main__":
-    M = build_random_matrix(100, 4) 
-    print(np.linalg.matrix_rank(M))
+    from src.helper import save_sparcity_figure
+    # make an image for testing purposes
+    M = build_random_matrix(100, 4).toarray()
+    save_sparcity_figure(M, "debug/random_sparcity.png")
+    
