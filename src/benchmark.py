@@ -1,6 +1,5 @@
 import pandas as pd
-from load_matrix import load_matrix
-from spai import compute_spai
+from spai import *
 from helper import *
 import os
 
@@ -8,7 +7,7 @@ import os
 def benchmark(path: str) -> None:
     A = load_matrix(path)
 
-    P = [_/10 for _ in range(11)]
+    P = [_/10 for _ in range(21)]
     data = {
         "p": [],
         "condition number": [],
@@ -18,7 +17,7 @@ def benchmark(path: str) -> None:
     for p in P:
         # calculate spaip preconditioner
         print(f"calculating spai-{p} of size {A.shape[0]} ...")
-        AM = A @ compute_spai(A, p, 1e-6)
+        AM = A @ spaip(A, p, 1e-6)
         cond = condition_number(AM)
         idiff = identity_difference(AM)
 

@@ -1,5 +1,5 @@
-from scipy.sparse import csr_matrix, save_npz
-from src.build_random_matrix import build_random_matrix
+from scipy.sparse import csc_matrix, save_npz
+from helper import build_random_matrix
 import os
 
 
@@ -17,7 +17,7 @@ def regen_matrices(dims: list) -> None:
                 os.remove(filepath)
     
     for N in dims:
-        M = csr_matrix(build_random_matrix(N=N, m=4))
+        M = csc_matrix(build_random_matrix(N=N, m=4))
         save_npz(f"matrices/{N}", M)
 
 

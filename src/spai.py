@@ -3,70 +3,102 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from helper import *
 
-def compute_spai(A: sp.csr_matrix, p: float, tol=1e-6) -> sp.csr_matrix:
-    if not sp.isspmatrix_csr(A):
-        raise ValueError(f"A deve ter classe {sp.csr_matrix}")
+def preconditioner_with_sparcity_S(A: sp.csc_matrix, S: sp.csc_matrix, tol=1e-6) -> sp.csc_matrix:
+    N = A.shape[0]
+    
+    # minimização
+    data, rows, cols = [], [], []
+    for k in range(N):
+        indices = S[:,k].nonzero()[0] # linha dos elementos não nulos da coluna k
+        if len(indices) == 0:
+            continue
+
+        Asub = A[indices, :][:, indices]
+        Asub.tocsc()
+        
+        ek = np.zeros(N)
+        ek[k] = 1
+        eksub = ek[indices]
+        
+        mk = spla.lsqr(Asub, eksub)[0]
+
+        for i, val in enumerate(mk):
+            if abs(val) > tol:
+                data.append(val)
+                cols.append(k)
+                rows.append(indices[i])
+    
+    return sp.csc_matrix((data, (rows, cols)), shape=A.shape)
+
+
+def spaip(A: sp.csc_matrix, p: float, tol=1e-6) -> sp.csc_matrix:
+    if not (0 <= p <= 2):
+        raise ValueError("'p' deve estar entre 0 e 2")
 
     N = A.shape[0]
     A = A.copy()
 
-    # removendo a fracao 'p' dos vertices
-    if p > 0:
-        S = A.copy()
-        S.data[:] = 1
-        S1 = S - sp.eye(N, format='csr')
-        
-        graus = np.array(S1.sum(axis=1)).flatten()
-        ordem = np.argsort(graus)
-        m = int(np.floor(p * N))
-        vertices_removidos = ordem[:m]
+    S = A.copy()
+    S.data[:] = 1
+    S.setdiag(0)
+    S.eliminate_zeros()
+    S1 = S.copy()
 
-        # Convert to LIL for efficient row/column modifications
-        A_lil = A.tolil()
-        for v in vertices_removidos:
-            A_lil[v, :] = 0
-            A_lil[:, v] = 0
-        A = (sp.eye(N, format='csr') + A_lil).tocsr()
+    if p == 0:
+        # SPAI-0
+        S_pattern = sp.eye(N, format="csc")
 
-    # minimizacao
-    M_data = []
-    M_rows = []
-    M_cols = []
+    elif p <= 1:
+        # SPAI-p com 0 < p <= 1
+        G = nx.from_scipy_sparse_array(S1)
+        degrees = sorted(G.degree, key=lambda x: x[1])  # (node, degree)
+        m = round((1 - p) * N)
+        nodes_to_remove = [v for v, _ in degrees[:m]]
 
-    for i in range(N):
-        # montando vetor 'ei' da miniminação de |Ami - ei|
-        e_i = np.zeros(N)
-        e_i[i] = 1
+        S1_p = S1.tolil()
+        for node in nodes_to_remove:
+            S1_p[node, :] = 0
+            S1_p[:, node] = 0
+        S1_p = S1_p.tocsc()
 
-        row_inds = A[:, i].nonzero()[0]
-        if len(row_inds) == 0:
-            continue
+        S_pattern = (sp.eye(N, format="csc") + S1_p)
 
-        A_sub = A[row_inds, :][:, row_inds].toarray()
-        e_sub = e_i[row_inds]
+    elif p <= 2:
+        # SPAI-p com 1 < p <= 2
+        S2 = S1 @ S1
+        S2.setdiag(0)
+        S2.eliminate_zeros()
+        S2_star = S2.copy()
 
-        # minimos quadrados
-        m_i = spla.lsqr(A_sub, e_sub)[0]
+        # Subtrai S1 da S2
+        diff = S2_star - S1
+        diff.data = np.where(diff.data > 0, 1, 0)
+        diff.eliminate_zeros()
 
-        # retornando M ao tamanho de A
-        for local_idx, val in enumerate(m_i):
-            if abs(val) > tol:
-                global_row = row_inds[local_idx]
-                M_rows.append(global_row)
-                M_cols.append(i)
-                M_data.append(val)
+        graus_S2 = np.array(diff.sum(axis=1)).flatten()
+        ordem_S2 = np.argsort(graus_S2)
 
-    M = sp.csr_matrix((M_data, (M_rows, M_cols)), shape=A.shape)
-    return M
+        m = round((2 - p) * N)
+        nodes_to_remove = ordem_S2[:m]
+
+        S2_p = S1.copy().tolil()
+        for node in nodes_to_remove:
+            S2_p[node, :] = 0
+            S2_p[:, node] = 0
+        S2_p = S2_p.tocsc()
+
+        S_pattern = (sp.eye(N, format="csc") + S2_p)
+
+    # retorn M tal que |A @ M - I| é minimo
+    return preconditioner_with_sparcity_S(A, S_pattern, tol=tol)
 
 
 if __name__ == "__main__":
-    from build_random_matrix import build_random_matrix
-    A = build_random_matrix(10, 4)
-    S = sp.csr_matrix(get_sparcity_pattern(A, 0))
+    A = load_matrix("matrices/100.npz")
+    p = 2
+    S = spaip(A, p)
 
-    M1 = compute_spai(A, 1)
-    M2 = compute_spai(A, 0)
-
-    show_sparcity_pattern([M1, M2, S])
+    show_sparcity_pattern(A @ A)
+    show_sparcity_pattern(A)
+    show_sparcity_pattern(S)
     
