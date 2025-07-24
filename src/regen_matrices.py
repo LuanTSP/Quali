@@ -10,6 +10,7 @@ def regen_matrices(dims: list) -> None:
     
     # deleta arquivos anteriores
     dirs = os.listdir("matrices")
+    print("Generating matrices...")
     if not dirs.count == 0:
         for filename in dirs:
             filepath = os.path.join("matrices", filename)
@@ -19,6 +20,8 @@ def regen_matrices(dims: list) -> None:
     for N in dims:
         M = csc_matrix(build_random_matrix(N=N, m=4))
         save_npz(f"matrices/{N}", M)
+        print(f"matrix of size {N} generated")
+    print("files saves in 'matrices'")
 
 
 if __name__ == "__main__":

@@ -1,104 +1,84 @@
 import numpy as np
+import networkx as nx
+from math import floor
 import scipy.sparse as sp
-import scipy.sparse.linalg as spla
-from helper import *
-
-def preconditioner_with_sparcity_S(A: sp.csc_matrix, S: sp.csc_matrix, tol=1e-6) -> sp.csc_matrix:
-    N = A.shape[0]
-    
-    # minimização
-    data, rows, cols = [], [], []
-    for k in range(N):
-        indices = S[:,k].nonzero()[0] # linha dos elementos não nulos da coluna k
-        if len(indices) == 0:
-            continue
-
-        Asub = A[indices, :][:, indices]
-        Asub.tocsc()
-        
-        ek = np.zeros(N)
-        ek[k] = 1
-        eksub = ek[indices]
-        
-        mk = spla.lsqr(Asub, eksub)[0]
-
-        for i, val in enumerate(mk):
-            if abs(val) > tol:
-                data.append(val)
-                cols.append(k)
-                rows.append(indices[i])
-    
-    return sp.csc_matrix((data, (rows, cols)), shape=A.shape)
+from scipy.sparse.linalg import lsqr
 
 
-def spaip(A: sp.csc_matrix, p: float, tol=1e-6) -> sp.csc_matrix:
+def compute_spaip_pattern(A: np.ndarray, p: float) -> np.ndarray:
     if not (0 <= p <= 2):
-        raise ValueError("'p' deve estar entre 0 e 2")
+        raise ValueError("p must be between 0 and 2")
 
-    N = A.shape[0]
-    A = A.copy()
+    n = A.shape[0]
 
-    S = A.copy()
-    S.data[:] = 1
-    S.setdiag(0)
-    S.eliminate_zeros()
-    S1 = S.copy()
+    G1 = nx.Graph()
+    G1.add_nodes_from(range(n))
+    for i in range(n):
+        for j in range(n):
+            if i != j and A[i, j] != 0:
+                G1.add_edge(i, j)
 
-    if p == 0:
-        # SPAI-0
-        S_pattern = sp.eye(N, format="csc")
+    if p <= 1:
+        m = round((1 - p) * n)
+        deg = dict(G1.degree())
+        to_remove = sorted(deg, key=deg.get)[:m]
+        G1.remove_nodes_from(to_remove)
 
-    elif p <= 1:
-        # SPAI-p com 0 < p <= 1
-        G = nx.from_scipy_sparse_array(S1)
-        degrees = sorted(G.degree, key=lambda x: x[1])  # (node, degree)
-        m = round((1 - p) * N)
-        nodes_to_remove = [v for v, _ in degrees[:m]]
+        P = np.eye(n, dtype=int)
+        for i, j in G1.edges():
+            P[i, j] = 1
+            P[j, i] = 1
+        return P
 
-        S1_p = S1.tolil()
-        for node in nodes_to_remove:
-            S1_p[node, :] = 0
-            S1_p[:, node] = 0
-        S1_p = S1_p.tocsc()
+    else:
+        G2 = nx.Graph()
+        G2.add_nodes_from(G1.nodes())
 
-        S_pattern = (sp.eye(N, format="csc") + S1_p)
+        for node in G1.nodes():
+            neighbors = list(G1.neighbors(node))
+            for i in range(len(neighbors)):
+                for j in range(i + 1, len(neighbors)):
+                    u, v = neighbors[i], neighbors[j]
+                    if u != v:
+                        G2.add_edge(u, v)
 
-    elif p <= 2:
-        # SPAI-p com 1 < p <= 2
-        S2 = S1 @ S1
-        S2.setdiag(0)
-        S2.eliminate_zeros()
-        S2_star = S2.copy()
+        for node in G1.nodes():
+            if G1.degree[node] > 0:
+                G2.add_edge(node, node)
 
-        # Subtrai S1 da S2
-        diff = S2_star - S1
-        diff.data = np.where(diff.data > 0, 1, 0)
-        diff.eliminate_zeros()
+        m = floor((2 - p) * n)
+        deg2 = dict(G2.degree())
+        to_remove = sorted(deg2, key=deg2.get)[:m]
+        G2.remove_nodes_from(to_remove)
 
-        graus_S2 = np.array(diff.sum(axis=1)).flatten()
-        ordem_S2 = np.argsort(graus_S2)
-
-        m = round((2 - p) * N)
-        nodes_to_remove = ordem_S2[:m]
-
-        S2_p = S1.copy().tolil()
-        for node in nodes_to_remove:
-            S2_p[node, :] = 0
-            S2_p[:, node] = 0
-        S2_p = S2_p.tocsc()
-
-        S_pattern = (sp.eye(N, format="csc") + S2_p)
-
-    # retorn M tal que |A @ M - I| é minimo
-    return preconditioner_with_sparcity_S(A, S_pattern, tol=tol)
+        P = np.eye(n, dtype=int)
+        for i, j in G2.edges():
+            P[i, j] = 1
+            P[j, i] = 1
+        return P
 
 
-if __name__ == "__main__":
-    A = load_matrix("matrices/100.npz")
-    p = 2
-    S = spaip(A, p)
+def fast_spai(A: sp.csc_matrix, p: float, tol: float = 1e-6) -> sp.csc_matrix:
+    n = A.shape[0]
+    A = A.tocsc()
+    P = compute_spaip_pattern(A.toarray(), p)
+    M_cols = []
+    row_indices = []
+    col_ptrs = [0]
 
-    show_sparcity_pattern(A @ A)
-    show_sparcity_pattern(A)
-    show_sparcity_pattern(S)
-    
+    for j in range(n):
+        pattern = np.where(P[:, j])[0]
+        if len(pattern) == 0:
+            col_ptrs.append(col_ptrs[-1])
+            continue
+        A_sub = A[:, pattern]
+        e_j = np.zeros(n)
+        e_j[j] = 1
+        result = lsqr(A_sub, e_j, atol=tol, btol=tol, iter_lim=1000)
+        x = result[0]
+        M_cols.extend(x)
+        row_indices.extend(pattern)
+        col_ptrs.append(len(M_cols))
+
+    M = sp.csc_matrix((M_cols, row_indices, col_ptrs), shape=(n, n))
+    return M

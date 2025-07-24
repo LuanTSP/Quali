@@ -1,79 +1,13 @@
 from matplotlib import pyplot as plt
 import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 from scipy.sparse import load_npz
 import networkx as nx
 import random
+from spai import compute_spaip_pattern
 from scipy.sparse import csc_matrix
 import numpy as np
-
-def save_sparcity_figure(A, path: str) -> None:
-    plt.spy(A)
-    plt.axis("off")
-    plt.savefig(path)
-
-
-def get_sparcity_pattern(A: sp.csc_matrix):
-    S = (A != 0).astype(int)
-    return sp.csc_matrix(S)
-
-
-def show_sparcity_pattern(A: sp.csc_matrix):
-    plt.spy(A.toarray())
-    plt.show()
-
-
-def identity_difference(A: sp.csc_matrix) -> float:
-    N = A.shape[0]
-    return spla.norm(A - sp.eye(N))
-
-
-# def condition_number(A: sp.csc_matrix) -> float:
-#     A_csc = A.tocsc()
-#     Ainv = spla.inv(A_csc)
-#     return spla.norm(A_csc) * spla.norm(Ainv)
-
-
-def condition_number(A: sp.csc_matrix) -> float:
-    # Estima norma 1 de A
-    Aop = spla.LinearOperator(shape=A.shape, matvec=A.dot, rmatvec=lambda x: A.T @ x)
-    norm_A = spla.onenormest(Aop)
-
-    # Fatoração LU de A (reutilizável e rápida)
-    lu = spla.splu(A)
-
-    # Define operador para A^{-1} usando LU
-    def Ainv(x): return lu.solve(x)
-    def Ainv_T(x): return lu.solve(x, 'T')
-
-    Ainv_op = spla.LinearOperator(shape=A.shape, matvec=Ainv, rmatvec=Ainv_T)
-    norm_Ainv = spla.onenormest(Ainv_op)
-
-    return norm_A * norm_Ainv
-
-
-def benchmark_identity_diference(A: sp.csc_matrix, M: sp.csc_matrix):
-    N = A.shape[0]
-    print("=== Identity difference benchmark ===")
-    print(f"|A - I| = {spla.norm(A - sp.eye(N))}")
-    print(f"|M - I| = {spla.norm(M - sp.eye(N))}")
-    print("\n")
-
-
-def benchmark_condition_number(A: sp.csc_matrix, M: sp.csc_matrix):
-    N = A.shape[0]
-    A_csc = A.tocsc()
-    Ainv = spla.inv(A_csc)
-    cond_A = spla.norm(A_csc) * spla.norm(Ainv)
-
-    M_csc = M.tocsc()
-    Minv = spla.inv(M_csc)
-    cond_M = spla.norm(M_csc) * spla.norm(Minv)
-
-    print("=== Condition number benchmark ===")
-    print(f"cond(A) = {cond_A}")
-    print(f"cond(M) = {cond_M}")
-    print("\n")
+import pandas as pd
+import os
 
 
 def load_matrix(filepath: str):
@@ -95,3 +29,75 @@ def build_random_matrix(N, m):
         M[i,i] = k  
     
     return csc_matrix(M)
+
+
+def show_spai_sparsity(A: sp.csc_matrix, p_values=None):
+    if p_values is None:
+        p_values = np.linspace(0, 2, 6)
+
+    n = len(p_values)
+    ncols = 4
+    nrows = (n + ncols - 1) // ncols
+
+    fig, axs = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows))
+    axs = axs.flatten()
+
+    for idx, p in enumerate(p_values):
+        pattern = np.array(compute_spaip_pattern(A, p))
+        axs[idx].spy(pattern)
+        axs[idx].set_title(f"SPAI pattern (p={p:.2f})")
+        axs[idx].set_xlabel("Column")
+        axs[idx].set_ylabel("Row")
+
+    for j in range(idx + 1, len(axs)):
+        axs[j].axis("off")
+        axs[j].grid("off")
+
+    fig.savefig("plots/sparcity.png")
+
+
+def plot_spai_results(filename: str = "spai_benchmark.csv"):
+    df = pd.read_csv(f"csv/{filename}")
+    
+    plt.style.use("seaborn-v0_8-darkgrid")
+    fig, axs = plt.subplots(3, 2, figsize=(14, 12))
+    fig.suptitle("SPAI Benchmark Results", fontsize=16)
+
+    axs[0, 0].plot(df["p"], df["cg_iters_no_prec"], label="CG iters (no prec)", marker='o')
+    axs[0, 0].plot(df["p"], df["cg_iters_with_spai"], label="CG iters (with SPAI)", marker='s')
+    axs[0, 0].set_ylabel("# Iterations")
+    axs[0, 0].legend()
+
+    axs[0, 1].plot(df["p"], df["cg_time_no_prec"], label="CG time (no prec)", marker='o')
+    axs[0, 1].plot(df["p"], df["cg_time_with_spai"], label="CG time (with SPAI)", marker='s')
+    axs[0, 1].set_ylabel("Time (s)")
+    axs[0, 1].legend()
+
+    axs[1, 0].plot(df["p"], df["spai_build_time"], label="SPAI Build Time", color='tab:green', marker='^')
+    axs[1, 0].set_ylabel("Time (s)")
+    axs[1, 0].legend()
+
+    axs[1, 1].plot(df["p"], df["identity_diff_frobenius"], label="‖MA - I‖_F", color='tab:red', marker='d')
+    axs[1, 1].set_ylabel("Frobenius Norm")
+    axs[1, 1].legend()
+
+    axs[2, 0].plot(df["p"], df["condition_number_est"].replace("NaN", np.nan).astype(float),
+                   label="Condition Number Estimate", color='tab:purple', marker='x')
+    axs[2, 0].set_ylabel("Cond. Number")
+    axs[2, 0].legend()
+
+    for ax in axs.flat:
+        ax.set_xlabel("p")
+        ax.grid(True)
+
+    axs[2, 1].axis("off")  # leave the last panel empty
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.savefig(f"plots/{filename}.png")
+
+
+def make_plot() -> None:
+    dirs = os.listdir("csv")
+    for file in dirs:
+        plot_spai_results(file)
+    print("Images saved!")
