@@ -3,7 +3,7 @@ from spai import *
 from helper import *
 import os
 import time
-from scipy.sparse.linalg import cg, eigsh
+from scipy.sparse.linalg import eigsh, gmres
 
 
 def benchmark_spai(A: sp.csc_matrix, b: np.ndarray, filename: str = "spai_benchmark.csv", p_values=None):
@@ -17,7 +17,7 @@ def benchmark_spai(A: sp.csc_matrix, b: np.ndarray, filename: str = "spai_benchm
 
         # Solve without preconditioner
         t0 = time.time()
-        x0, info0 = cg(A, b, atol=1e-6)
+        x0, info0 = gmres(A, b, atol=1e-6)
         t1 = time.time()
         time_no_prec = t1 - t0
         iters_no_prec = len(x0) if info0 == 0 else -1
@@ -36,7 +36,7 @@ def benchmark_spai(A: sp.csc_matrix, b: np.ndarray, filename: str = "spai_benchm
 
         # Solve with preconditioner
         t4 = time.time()
-        x1, info1 = cg(A, b, M=M_linop, atol=1e-6)
+        x1, info1 = gmres(A, b, M=M_linop, atol=1e-6)
         t5 = time.time()
         time_with_prec = t5 - t4
         iters_with_prec = len(x1) if info1 == 0 else -1
@@ -54,10 +54,10 @@ def benchmark_spai(A: sp.csc_matrix, b: np.ndarray, filename: str = "spai_benchm
 
         records.append({
             "p": round(p, 4),
-            "cg_iters_no_prec": iters_no_prec,
-            "cg_time_no_prec": round(time_no_prec, 6),
-            "cg_iters_with_spai": iters_with_prec,
-            "cg_time_with_spai": round(time_with_prec, 6),
+            "gmres_iters_no_prec": iters_no_prec,
+            "gmres_time_no_prec": round(time_no_prec, 6),
+            "gmres_iters_with_spai": iters_with_prec,
+            "gmres_time_with_spai": round(time_with_prec, 6),
             "spai_build_time": round(spai_time, 6),
             "identity_diff_frobenius": round(identity_diff, 6),
             "condition_number_est": round(cond_num, 6) if not np.isnan(cond_num) else "NaN"

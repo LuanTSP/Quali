@@ -49,9 +49,10 @@ def show_spai_sparsity(A: sp.csc_matrix, p_values=None):
         axs[idx].set_xlabel("Column")
         axs[idx].set_ylabel("Row")
 
-    for j in range(idx + 1, len(axs)):
-        axs[j].axis("off")
-        axs[j].grid("off")
+    for i in range(idx + 1, len(axs)):
+        for j in range(len[axs[0]]):
+            axs[i][j].axis("off")
+            axs[i][j].grid("off")
 
     fig.savefig("plots/sparcity.png")
 
@@ -63,13 +64,13 @@ def plot_spai_results(filename: str = "spai_benchmark.csv"):
     fig, axs = plt.subplots(3, 2, figsize=(14, 12))
     fig.suptitle("SPAI Benchmark Results", fontsize=16)
 
-    axs[0, 0].plot(df["p"], df["cg_iters_no_prec"], label="CG iters (no prec)", marker='o')
-    axs[0, 0].plot(df["p"], df["cg_iters_with_spai"], label="CG iters (with SPAI)", marker='s')
+    axs[0, 0].plot(df["p"], df["gmres_iters_no_prec"], label="gmres iters (no prec)", marker='o')
+    axs[0, 0].plot(df["p"], df["gmres_iters_with_spai"], label="gmres iters (with SPAI)", marker='s')
     axs[0, 0].set_ylabel("# Iterations")
     axs[0, 0].legend()
 
-    axs[0, 1].plot(df["p"], df["cg_time_no_prec"], label="CG time (no prec)", marker='o')
-    axs[0, 1].plot(df["p"], df["cg_time_with_spai"], label="CG time (with SPAI)", marker='s')
+    axs[0, 1].plot(df["p"], df["gmres_time_no_prec"], label="gmres time (no prec)", marker='o')
+    axs[0, 1].plot(df["p"], df["gmres_time_with_spai"], label="gmres time (with SPAI)", marker='s')
     axs[0, 1].set_ylabel("Time (s)")
     axs[0, 1].legend()
 
@@ -93,11 +94,14 @@ def plot_spai_results(filename: str = "spai_benchmark.csv"):
     axs[2, 1].axis("off")  # leave the last panel empty
 
     plt.tight_layout(rect=[0, 0, 1, 0.97])
-    plt.savefig(f"plots/{filename}.png")
+    plt.savefig(f"plots/{filename.replace(".csv", "")}.png")
 
 
 def make_plot() -> None:
+    print("Making Plot Images...")
     dirs = os.listdir("csv")
     for file in dirs:
+        filename = file.replace(".csv", "")
+        print(f"Saving image {filename}.png")
         plot_spai_results(file)
     print("Images saved!")
