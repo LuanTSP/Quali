@@ -1,5 +1,6 @@
 import numpy as np
-from helper import load_matrix
+from helper import plot_D_A_A2, plot_spai_interpolation
+from helper import build_random_matrix
 from matplotlib import pyplot as plt
 from scipy.sparse import csr_matrix, eye, issparse
 
@@ -48,18 +49,6 @@ def make_spai_pattern(A: np.ndarray, p: float) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    A = load_matrix("matrices/10.npz")
-    fig, axs = plt.subplots(nrows=1, ncols=6)
-    S0 = make_spai_pattern(A, 1)
-    S1 = make_spai_pattern(A, 1.2)
-    S2 = make_spai_pattern(A, 1.4)
-    S3 = make_spai_pattern(A, 1.8)
-    S4 = make_spai_pattern(A, 2)
-    
-    axs[0].spy(S0)
-    axs[1].spy(S1)
-    axs[2].spy(S2)
-    axs[3].spy(S3)
-    axs[4].spy(S4)
-    axs[5].spy((A @ A).toarray())
-    plt.show()
+   A = build_random_matrix(15, 4).toarray()
+   plot_D_A_A2(A, save=True)
+   plot_spai_interpolation(A, save=True)
