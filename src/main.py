@@ -16,11 +16,6 @@ def main():
 
     # salva um gráfico para cada resultado .csv salvo na pasta plots
     make_plot()
-    
-    # sava um gráfico do padrão de esparcidade de A na pasta plots
-    A = load_matrix("matrices/15.npz").toarray()
-    plot_D_A_A2(A, save=True)
-    plot_spai_interpolation(A, save=True)
 
 
 

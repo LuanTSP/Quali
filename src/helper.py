@@ -20,13 +20,15 @@ def build_random_matrix(N, m):
 
     M = nx.to_numpy_array(G)
 
+    # muda os elementos não nulos de M para valores aleatorios e seta a diagonal
+    # de forma em que a matriz seja diagonal dominante
     for i in range (0,N):
         k = 0
         for j in range (0,N):
             if M[i,j] != 0: 
                 k += 1
-                M[i,j] += 2*random.random() 
-        M[i,i] = k  
+                M[i,j] = random.random()
+        M[i,i] = k
     
     return csc_matrix(M)
 
