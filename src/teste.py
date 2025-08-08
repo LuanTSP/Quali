@@ -6,7 +6,6 @@ import numpy as np
 from helper import build_random_matrix, make_spai_pattern, plot_spai_interpolation
 from scipy.sparse.linalg import lsqr
 
-
 def plot_graph_adjacency():
     sns.set_theme(style="white")
 
@@ -221,13 +220,18 @@ def plot_matrix_with_values():
     plt.show()
 
 
-def plot_interpolation():
-    pass
-
 
 if __name__ == "__main__":
-    from spai import fast_spai
-    A = build_random_matrix(15, 4)
-    print(np.allclose(A.toarray(), A.T.toarray(), rtol=1e-6))
+    from spai import make_spai_0, fast_spai
+    from scipy.linalg import norm
+    from scipy.sparse import eye
+    import scipy.sparse as sp
+    from tests.tests import get_info
+
+    A = build_random_matrix(5000, 4)
+    info = get_info(A)
+    for key in info.keys():
+        print(f"{key}: {info[key]}")
+    
 
 

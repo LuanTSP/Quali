@@ -71,3 +71,15 @@ def fast_spai(A: sp.csc_matrix, p: float, tol: float = 1e-6) -> sp.csc_matrix:
 
     M = sp.csc_matrix((M_cols, row_indices, col_ptrs), shape=(n, n)).transpose()
     return M
+
+
+def make_spai_0(A: sp.csc_matrix):
+    N = A.shape[0]
+    A = A.toarray()
+    D = np.zeros(shape=A.shape)
+
+    for i in range(N):
+        D[i,i] = A[i,i] / np.sum(A[i,:] * A[i,:])
+    
+    return sp.csc_matrix(D)
+    

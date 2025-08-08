@@ -8,6 +8,7 @@ from scipy.sparse import csc_matrix
 import numpy as np
 import pandas as pd
 import os
+import time
 
 
 def load_matrix(filepath: str):
@@ -215,3 +216,12 @@ def plot_spai_interpolation(A, save=False):
         plt.savefig("plots/Interpolation [1,2].png")
 
     plt.show()
+
+
+def timeit(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(args, kwargs)
+        elapsed = time.perf_counter() - start_time
+        return result, elapsed
+    return wrapper
