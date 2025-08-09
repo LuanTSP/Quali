@@ -1,0 +1,11 @@
+##################################################
+MATRIX PROPERTIES
+##################################################
+
+dimensao : (1000, 1000)
+quadrada : True
+diagonal_dominante_linhas : True
+diagonal_dominante_colunas : True
+definida_positiva : True
+simetrica : False
+esparcidade : 0.991

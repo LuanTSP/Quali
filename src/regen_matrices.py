@@ -4,6 +4,10 @@ import os
 
 
 def regen_matrices(dims: list) -> None:
+    """
+    Gera novas matrizes na pasta 'matrices' com as dimensões especificadas
+    na lista 'dims'
+    """
     # cria caminho se não existe
     if not os.path.exists("matrices/"):
         os.makedirs("matrices")

@@ -1,12 +1,14 @@
 import numpy as np
-import networkx as nx
-from math import floor
 import scipy.sparse as sp
 from scipy.sparse.linalg import lsqr
 from scipy.sparse import csr_matrix, eye, issparse
+from helper import timeit
 
 
 def make_spai_pattern(A: np.ndarray, p: float) -> np.ndarray:
+    """
+    Computa o padrão de espacidade de SPAI-p para A e 0 <= p <= 2
+    """
     if not (0 <= p <= 2):
         raise ValueError("p must be between 0 and 2")
 
@@ -45,9 +47,14 @@ def make_spai_pattern(A: np.ndarray, p: float) -> np.ndarray:
 
         M = I + S1_csr + S2.tocsr()
         return (M > 0).astype(int).toarray()
+    
 
-
+@timeit
 def fast_spai(A: sp.csc_matrix, p: float, tol: float = 1e-6) -> sp.csc_matrix:
+    """
+    Retorna o precondicionador a esquerda da matriz A com esparcidade dada por SPAI-p
+    - M é uma aproximação de A^{-1} a esquerda 
+    """
     n = A.shape[0]
     A = A.tocsc().transpose()
     P = make_spai_pattern(A.toarray(), p)
@@ -73,7 +80,11 @@ def fast_spai(A: sp.csc_matrix, p: float, tol: float = 1e-6) -> sp.csc_matrix:
     return M
 
 
+@timeit
 def make_spai_0(A: sp.csc_matrix):
+    """
+    Computa o precondicionador de M SPAI-0 de A
+    """
     N = A.shape[0]
     A = A.toarray()
     D = np.zeros(shape=A.shape)
