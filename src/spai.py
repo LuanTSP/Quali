@@ -3,6 +3,8 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import lsqr
 from scipy.sparse import csr_matrix, eye, issparse
 from helper import timeit
+from scipy.linalg import lstsq
+from joblib import Parallel, delayed
 
 
 def make_spai_pattern(A: np.ndarray, p: float) -> np.ndarray:
@@ -81,6 +83,103 @@ def fast_spai(A: sp.csc_matrix, p: float, tol: float = 1e-6) -> sp.csc_matrix:
 
 
 @timeit
+def main_spai(A: sp.csc_matrix, p: float, tol: float = 1e-6):
+    n = A.shape[0]
+    P = make_spai_pattern(A=A, p=p).transpose()   # pattern (numpy array)
+    A = A.transpose().tocsr()                     # CSR: fast row slicing
+
+    M_cols = []
+    row_indices = []
+    col_ptrs = [0]
+
+    for i in range(n):
+        J = P[:, i].nonzero()[0]
+        if len(J) == 0:
+            col_ptrs.append(col_ptrs[-1])
+            continue
+
+        I = np.unique(A[:, J].nonzero()[0])
+        A_sub = A[I, :][:, J].tocsc()
+
+        b = np.zeros(len(I))
+        if i in I:
+            b[np.searchsorted(I, i)] = 1.0
+
+        x = lstsq(A_sub.toarray(), b, cond=None)[0]
+
+        M_cols.extend(x)
+        row_indices.extend(J)
+        col_ptrs.append(len(M_cols))
+
+    M = sp.csc_matrix((M_cols, row_indices, col_ptrs), shape=(n, n))
+    return M.transpose()
+
+
+def compute_column(i, A, P):
+    J = P[:, i].nonzero()[0]
+    if len(J) == 0:
+        return [], [], 0
+
+    I = np.unique(A[:, J].nonzero()[0])
+    A_sub = A[I, :][:, J].tocsc()
+
+    b = np.zeros(len(I))
+    if i in I:
+        b[np.searchsorted(I, i)] = 1.0
+
+    x = lstsq(A_sub.toarray(), b, cond=None)[0]
+    return list(x), list(J), 1
+
+
+@timeit
+def parallel_spai(A: sp.csc_matrix, p: float, tol: float = 1e-6, n_jobs=-1):
+    n = A.shape[0]
+    P = make_spai_pattern(A=A, p=p).transpose()
+    A = A.transpose().tocsr()
+
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(compute_column)(i, A, P) for i in range(n)
+    )
+
+    M_cols, row_indices, col_ptrs = [], [], [0]
+    for x, J, nonempty in results:
+        M_cols.extend(x)
+        row_indices.extend(J)
+        col_ptrs.append(len(M_cols))
+
+    M = sp.csc_matrix((M_cols, row_indices, col_ptrs), shape=(n, n))
+    return M.transpose()
+
+
+@timeit
+def parallel_spai_fast(A: sp.csc_matrix, p: float, tol: float = 1e-6, n_jobs=-1):
+    n = A.shape[0]
+    P = make_spai_pattern(A=A, p=p).transpose()
+    A = A.transpose().tocsr()
+
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(compute_column)(i, A, P) for i in range(n)
+    )
+
+    # estimate nnz
+    nnz_est = sum(len(x) for x, _, _ in results)
+    M_data = np.empty(nnz_est, dtype=float)
+    M_rows = np.empty(nnz_est, dtype=int)
+    M_cols = np.zeros(n+1, dtype=int)
+
+    idx = 0
+    for col_idx, (x, J, _) in enumerate(results):
+        k = len(x)
+        M_data[idx:idx+k] = x
+        M_rows[idx:idx+k] = J
+        idx += k
+        M_cols[col_idx+1] = idx
+
+    M = sp.csc_matrix((M_data, M_rows, M_cols), shape=(n, n))
+    return M.transpose()
+
+
+@timeit
 def make_spai_0(A: sp.csc_matrix):
     """
     Computa o precondicionador de M SPAI-0 de A
@@ -93,4 +192,3 @@ def make_spai_0(A: sp.csc_matrix):
         D[i,i] = A[i,i] / np.sum(A[i,:] * A[i,:])
     
     return sp.csc_matrix(D)
-    

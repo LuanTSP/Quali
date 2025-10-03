@@ -29,5 +29,5 @@ def regen_matrices(dims: list) -> None:
 
 
 if __name__ == "__main__":
-    dims = [10, 100, 300, 500, 800, 1000, 2000, 3000, 4000, 5000]
+    dims = [500]
     regen_matrices(dims)
